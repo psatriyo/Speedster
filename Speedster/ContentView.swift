@@ -9,17 +9,18 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
-@MainActor
 final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var region: MKCoordinateRegion
     @Published var speed: CLLocationSpeed?
 
     private let locationManager: CLLocationManager
-    private let span = MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
 
     override init() {
         let defaultCoordinate = CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.00902)
-        region = MKCoordinateRegion(center: defaultCoordinate, span: span)
+        region = MKCoordinateRegion(
+            center: defaultCoordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
         speed = nil
         locationManager = CLLocationManager()
 
@@ -30,7 +31,8 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         locationManager.distanceFilter = kCLDistanceFilterNone
         locationManager.activityType = .fitness
         locationManager.pausesLocationUpdatesAutomatically = false
-        configureAuthorization()
+        locationManager.requestWhenInUseAuthorization()
+        handleAuthorizationStatus(locationManager.authorizationStatus)
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -41,39 +43,49 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         handleAuthorizationStatus(status)
     }
 
-    private func configureAuthorization() {
-        locationManager.requestWhenInUseAuthorization()
-        handleAuthorizationStatus(locationManager.authorizationStatus)
-    }
-
     private func handleAuthorizationStatus(_ status: CLAuthorizationStatus) {
         switch status {
         case .authorizedAlways, .authorizedWhenInUse:
-            startTracking()
+            if CLLocationManager.locationServicesEnabled() {
+                locationManager.startUpdatingLocation()
+            }
         case .denied, .restricted:
-            stopTracking()
+            locationManager.stopUpdatingLocation()
+            DispatchQueue.main.async {
+                self.speed = nil
+            }
         case .notDetermined:
-            break
+            locationManager.requestWhenInUseAuthorization()
         @unknown default:
             break
         }
     }
 
-    private func startTracking() {
-        guard CLLocationManager.locationServicesEnabled() else { return }
-        locationManager.startUpdatingLocation()
-    }
-
-    private func stopTracking() {
-        locationManager.stopUpdatingLocation()
-        speed = nil
-    }
-
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last, location.horizontalAccuracy >= 0 else { return }
+        guard let location = locations.last else { return }
 
-        withAnimation(.easeInOut(duration: 0.25)) {
-            region = MKCoordinateRegion(center: location.coordinate, span: span)
+        let coordinate = location.coordinate
+        let updatedRegion = MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+        )
+
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                self.region = updatedRegion
+            }
+
+            if location.speed >= 0 {
+                self.speed = location.speed
+            } else {
+                self.speed = nil
+            }
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        DispatchQueue.main.async {
+            self.speed = nil
         }
 
         speed = location.speed >= 0 ? location.speed : nil
@@ -81,6 +93,11 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         speed = nil
+    }
+
+    var speedInKilometersPerHour: Double? {
+        guard let currentSpeed = speed, currentSpeed >= 0 else { return nil }
+        return currentSpeed * 3.6
     }
 
     var speedInKilometersPerHour: Double? {

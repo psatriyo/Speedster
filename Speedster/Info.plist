@@ -4,5 +4,9 @@
 <dict>
         <key>NSLocationWhenInUseUsageDescription</key>
         <string>Your location is used to show your position on the map and calculate your current speed.</string>
+        <key>UIBackgroundModes</key>
+        <array>
+                <string>remote-notification</string>
+        </array>
 </dict>
 </plist>
