@@ -87,6 +87,17 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         DispatchQueue.main.async {
             self.speed = nil
         }
+
+        speed = location.speed >= 0 ? location.speed : nil
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        speed = nil
+    }
+
+    var speedInKilometersPerHour: Double? {
+        guard let currentSpeed = speed, currentSpeed >= 0 else { return nil }
+        return currentSpeed * 3.6
     }
 
     var speedInKilometersPerHour: Double? {
