@@ -8,10 +8,11 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import Combine
 
 final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var region: MKCoordinateRegion
-    @Published var speed: CLLocationSpeed?
+    @Published var speed: CLLocationSpeed = 0
 
     private let locationManager: CLLocationManager
 
@@ -19,9 +20,8 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         let defaultCoordinate = CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.00902)
         region = MKCoordinateRegion(
             center: defaultCoordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
-        speed = nil
         locationManager = CLLocationManager()
 
         super.init()
@@ -39,10 +39,6 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         handleAuthorizationStatus(manager.authorizationStatus)
     }
 
-    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        handleAuthorizationStatus(status)
-    }
-
     private func handleAuthorizationStatus(_ status: CLAuthorizationStatus) {
         switch status {
         case .authorizedAlways, .authorizedWhenInUse:
@@ -52,7 +48,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         case .denied, .restricted:
             locationManager.stopUpdatingLocation()
             DispatchQueue.main.async {
-                self.speed = nil
+                self.speed = 0
             }
         case .notDetermined:
             locationManager.requestWhenInUseAuthorization()
@@ -67,7 +63,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         let coordinate = location.coordinate
         let updatedRegion = MKCoordinateRegion(
             center: coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
 
         DispatchQueue.main.async {
@@ -75,34 +71,18 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
                 self.region = updatedRegion
             }
 
-            if location.speed >= 0 {
-                self.speed = location.speed
-            } else {
-                self.speed = nil
-            }
+            self.speed = location.speed >= 0 ? location.speed : 0
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         DispatchQueue.main.async {
-            self.speed = nil
+            self.speed = 0
         }
-
-        speed = location.speed >= 0 ? location.speed : nil
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        speed = nil
-    }
-
-    var speedInKilometersPerHour: Double? {
-        guard let currentSpeed = speed, currentSpeed >= 0 else { return nil }
-        return currentSpeed * 3.6
-    }
-
-    var speedInKilometersPerHour: Double? {
-        guard let currentSpeed = speed, currentSpeed >= 0 else { return nil }
-        return currentSpeed * 3.6
+    var speedInKilometersPerHour: Double {
+        return speed >= 0 ? speed * 3.6 : 0
     }
 }
 
@@ -122,7 +102,8 @@ struct ContentView: View {
     }()
 
     private var speedText: String {
-        if let speed = locationManager.speedInKilometersPerHour {
+        let speed = locationManager.speedInKilometersPerHour
+        if speed > 0 {
             let measurement = Measurement(value: speed, unit: UnitSpeed.kilometersPerHour)
             return Self.speedFormatter.string(from: measurement)
         } else {
@@ -138,6 +119,7 @@ struct ContentView: View {
                 showsUserLocation: true,
                 userTrackingMode: $userTrackingMode
             )
+            .ignoresSafeArea()
 
             Text(speedText)
                 .font(.system(.title2, design: .rounded))
