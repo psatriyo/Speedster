@@ -23,7 +23,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         let defaultCoordinate = CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.00902)
         region = MKCoordinateRegion(
             center: defaultCoordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
         )
         locationManager = CLLocationManager()
 
